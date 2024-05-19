@@ -1,0 +1,12 @@
+- name: "Example Needle 1"
+  val: "48 65 6c 6c 6f ff ff ff ff ff ff ff"  # This is "Hello" in hexadecimal
+  val_format: hex
+  description_notes: "A simple hex value of the word 'Hello'"
+  happiness_level: 1
+
+- name: "Example Needle 2"
+  val: "world pluss a bunch of other random text"
+  val_format: ascii
+  description_notes: "A plain ASCII value"
+  happiness_level: 2
+  write_to_file: false
