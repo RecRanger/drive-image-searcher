@@ -114,8 +114,8 @@ impl ProcessDataState {
                         display_hex_offset(match_start_global_offset, 20),
                         // offset_within_file:
                         display_hex_offset(
-                            match_start_global_offset + write_start_pos_in_chunk as u64,
-                            1 // minimum width is good
+                            pos_in_chunk - write_start_pos_in_chunk,
+                            1 // minimum width is fine
                         ),
                     );
 

@@ -98,7 +98,9 @@ pub fn log_polars_summary(
         .agg([
             col("happiness_level").first(), // should all be the same
             len().alias("count"),
-            col("start_offset").max().alias("latest_start_offset"),
+            col("match_start_global_offset")
+                .max()
+                .alias("latest_global_offset"),
             col("description_notes").first(), // should all be the same
         ])
         .sort(
