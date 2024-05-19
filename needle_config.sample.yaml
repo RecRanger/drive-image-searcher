@@ -5,7 +5,7 @@
   happiness_level: 1
 
 - name: "Example Needle 2"
-  val: "world pluss a bunch of other random text"
+  val: "word plus a bunch of other random text"
   val_format: ascii
   description_notes: "A plain ASCII value"
   happiness_level: 2

@@ -1,6 +1,11 @@
 # drive-image-searcher
 A Rust CLI tool to stream a drive image, and search for one or more byte patterns
 
+```bash
+cargo install drive_image_searcher
+drive_image_searcher -h
+```
+
 ## Features
 * Supports custom "needle" definition configuration file.
 * Supports reading from compressed disk images (lz4 and xz compression).
@@ -9,7 +14,23 @@ A Rust CLI tool to stream a drive image, and search for one or more byte pattern
 
 ## Usage
 
-1. Copy the `needle_config.sample.yaml` file, and fill it with search patterns you want to locate. <!-- TODO: add link, fill example inline here >
+1. Download the [`needle_config.sample.yaml` file](https://github.com/RecRanger/drive-image-searcher/blob/main/needle_config.sample.yaml), and fill it with search patterns you want to locate. For example:
+
+```yaml
+- name: "Example Needle 1"
+  val: "48 65 6c 6c 6f ff ff ff ff ff ff ff"  # This is "Hello" in hexadecimal
+  val_format: hex
+  description_notes: "A simple hex value of the word 'Hello'"
+  happiness_level: 1
+
+- name: "Example Needle 2"
+  val: "word plus a bunch of other random text"
+  val_format: ascii
+  description_notes: "A plain ASCII value"
+  happiness_level: 2
+  write_to_file: false
+```
+
 2. Run `cargo install drive_image_searcher`.
 3. Run `drive_image_searcher -c none -i /path/to/dd_file.img -n /path/to/needle_config.yaml -o ./output_dir/`
 
