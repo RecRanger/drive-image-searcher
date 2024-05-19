@@ -2,8 +2,8 @@
 A Rust CLI tool to stream a drive image, and search for one or more byte patterns
 
 ```bash
-cargo install drive_image_searcher
-drive_image_searcher -h
+cargo install drive-image-searcher
+drive-image-searcher -h
 ```
 
 ## Features
@@ -31,7 +31,7 @@ drive_image_searcher -h
   write_to_file: false
 ```
 
-2. Run `cargo install drive_image_searcher`.
-3. Run `drive_image_searcher -c none -i /path/to/dd_file.img -n /path/to/needle_config.yaml -o ./output_dir/`
+2. Run `cargo install drive-image-searcher`.
+3. Run `drive-image-searcher -c none -i /path/to/dd_file.img -n /path/to/needle_config.yaml -o ./output_dir/`
 
 When complete, matching instances within the files will be in `./output_dir/`, alongside logs.
