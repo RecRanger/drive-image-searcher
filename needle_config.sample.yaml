@@ -10,3 +10,12 @@
   description_notes: "A plain ASCII value"
   happiness_level: 2
   write_to_file: false
+
+- name: "Example Needle 3"
+  val: some_text_here
+  val_format: ascii
+  description_notes: "Some random text"
+  happiness_level: 2
+  write_to_file: false
+  byte_count_before_match: 512
+  byte_count_after_match: 4096

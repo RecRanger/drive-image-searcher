@@ -1,6 +1,6 @@
 {
-    "rust-analyzer.checkOnSave.command": "clippy",
     "editor.defaultFormatter": null,
     "editor.formatOnSave": true,
-    "editor.formatOnPaste": false
+    "editor.formatOnPaste": false,
+    "rust-analyzer.diagnostics.styleLints.enable": true
 }

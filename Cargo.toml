@@ -1,6 +1,6 @@
 [package]
 name = "drive-image-searcher"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 license = "BSD-3-Clause"
@@ -23,6 +23,7 @@ env_logger = "0.11.3"
 log = "0.4.21"
 memmap = "0.7.0"
 num-format = "0.4.4"
+thousands = "0.2.0"
 num-traits = "0.2.18"
 rand = "0.8.5"
 

@@ -7,14 +7,19 @@ use std::io::Read;
 
 use std::str::FromStr;
 
+const DEFAULT_BYTE_COUNT_BEFORE_MATCH: u64 = 1024;
+const DEFAULT_BYTE_COUNT_AFTER_MATCH: u64 = 1024;
+
 #[derive(Clone)]
 pub struct Needle {
     pub name: String,
     pub val: Vec<u8>,
     pub description_notes: String,
-    /// 0-9, where 9 is "very happy"
+    /// significance level from 0-9, where 9 is "very happy"
     pub happiness_level: u8,
     pub write_to_file: bool,
+    pub byte_count_before_match: u64,
+    pub byte_count_after_match: u64,
     // TODO: add more options to search both endians, etc.
     // TODO: add option for 'shortest substring to match' to search for chunks within each needle
     // TODO: add "ignore if other one is found" option to ignore substrings of other searches
@@ -45,6 +50,8 @@ impl Needle {
             description_notes: config_needle_val.description_notes.clone(),
             happiness_level: config_needle_val.happiness_level,
             write_to_file: config_needle_val.write_to_file,
+            byte_count_before_match: DEFAULT_BYTE_COUNT_BEFORE_MATCH,
+            byte_count_after_match: DEFAULT_BYTE_COUNT_AFTER_MATCH,
         }
     }
 
@@ -130,4 +137,19 @@ pub fn load_needles_from_file(file_path: &str) -> Result<Vec<Needle>, serde_yaml
         .map(Needle::from_needle_val_config)
         .collect();
     Ok(needle_vals)
+}
+
+// test: load needles from file in <repo root>/needle_config.sample.yaml
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_needles_from_file() {
+        let needles = load_needles_from_file("needle_config.sample.yaml").unwrap();
+        assert!(needles.len() > 2);
+        assert!(needles[0].name == "Example Needle 1");
+        assert!(needles[1].name == "Example Needle 2");
+        assert!(needles[2].name == "Example Needle 3");
+    }
 }

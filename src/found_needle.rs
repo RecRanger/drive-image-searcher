@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use std::env;
 use std::error;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
@@ -16,7 +17,7 @@ use crate::needle::Needle;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NeedleValFound {
     pub name: String,
-    pub start_offset: u64,
+    pub match_start_global_offset: u64,
     pub val: Vec<u8>,
     pub val_as_str: String,
     pub description_notes: String,
@@ -31,7 +32,7 @@ pub struct NeedleValFound {
 impl NeedleValFound {
     pub fn from_needle_val(
         needle_val: &Needle,
-        global_start_offset: u64,
+        match_start_global_offset: u64,
         input_file_path: &Path,
     ) -> NeedleValFound {
         let input_file_name = input_file_path
@@ -56,7 +57,7 @@ impl NeedleValFound {
 
         let needle_val_found = NeedleValFound {
             name: needle_val.name.clone(),
-            start_offset: global_start_offset,
+            match_start_global_offset,
             val: needle_val.val.clone(),
             val_as_str: needle_val.val_as_string(),
             description_notes: needle_val.description_notes.clone(),
@@ -106,13 +107,9 @@ pub fn log_polars_summary(
         )
         .collect()?;
 
-    // print out in awful chunks because the way to set the row numbers in to_string isn't there
-    let rows_per_print = 6;
-    for row_num in (0..df.height()).step_by(rows_per_print) {
-        let df = df.slice(row_num as i64, rows_per_print);
-
-        info!("{}", df);
-    }
+    // print out the result
+    env::set_var("POLARS_FMT_MAX_ROWS", (df.height() + 5).to_string());
+    info!("{}", df);
 
     Ok(())
 }

@@ -8,6 +8,10 @@ mod found_needle;
 mod process_data;
 use crate::process_data::{ProcessDataState, SearchAssignment};
 
+mod display_hex;
+
+use num_format::{Locale, ToFormattedString as _};
+
 use clap::{crate_version, App, Arg};
 use found_needle::log_polars_summary;
 
@@ -23,7 +27,6 @@ use xz2::read::XzDecoder;
 
 use env_logger::Env;
 use log::{debug, error, info, warn};
-use num_format::{Locale, ToFormattedString as _};
 use num_traits::AsPrimitive;
 
 fn main() -> io::Result<()> {
@@ -60,7 +63,7 @@ fn main() -> io::Result<()> {
                 .long("compression-format")
                 .possible_values(vec!["none", "xz", "lz4"])
                 .required(true)
-                .default_value("lz4"),
+                .default_value("none"),
         )
         .arg(
             Arg::with_name("needle_config_yaml_path")

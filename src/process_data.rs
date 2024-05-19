@@ -1,18 +1,16 @@
+use crate::display_hex::display_hex_offset;
 use crate::found_needle::NeedleValFound;
+use crate::needle::Needle;
 
-use std::time::Instant;
+use num_format::{Locale, ToFormattedString as _};
 
+use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
-
-use crate::needle::Needle;
+use std::time::Instant;
 
 use log::{debug, error, info};
-
-use std::fs;
-
-use num_format::{Locale, ToFormattedString as _};
 
 pub struct SearchAssignment {
     pub input_file_path: PathBuf,
@@ -51,8 +49,8 @@ impl ProcessDataState {
     }
 
     pub fn do_search(&mut self, search_assignment: &SearchAssignment) {
-        let haystack_chunk_global_start_offset = self.total_haystack_bytes_read;
-        let haystack_chunk_global_end_offset =
+        let haystack_chunk_start_global_offset = self.total_haystack_bytes_read;
+        let _haystack_chunk_end_global_offset =
             self.total_haystack_bytes_read + (self.haystack_chunk_buffer.len() as u64);
 
         for needle in search_assignment.needles.as_slice() {
@@ -63,12 +61,14 @@ impl ProcessDataState {
                 .position(|window| window == needle_val_sequence)
             {
                 // Found a match!
-                let window_global_start_offset: u64 =
-                    haystack_chunk_global_start_offset + pos_in_chunk as u64;
+                // Window = Match now
+                let match_start_global_offset: u64 =
+                    haystack_chunk_start_global_offset + pos_in_chunk as u64;
                 let needle_val_as_string = needle.val_as_string();
 
+                // just a debug, not the main log
                 debug!(
-                    "{} Found '{}' {} at position {} in the buffer",
+                    "{} Found '{}' {} at position {} in the chunk",
                     needle.happiness_level_as_string(),
                     needle.name,
                     needle_val_as_string,
@@ -78,18 +78,11 @@ impl ProcessDataState {
                 // Create the NeedleValFound object
                 let needle_val_found = NeedleValFound::from_needle_val(
                     needle,
-                    window_global_start_offset,
+                    match_start_global_offset + pos_in_chunk as u64,
                     &search_assignment.input_file_path,
                 );
 
                 // Write the haystack chunk to disk
-                // `chunk_file_name` format: <this match's offset>_<file_start_offset>_<file_end_offset>
-                let chunk_file_name = format!(
-                    "found_{}_{}_{}.bin",
-                    pos_in_chunk,
-                    haystack_chunk_global_start_offset,
-                    haystack_chunk_global_end_offset
-                );
                 let needle_dir_path = search_assignment.output_dir_path.clone().join(format!(
                     "{}_{}",
                     needle.happiness_level,
@@ -107,6 +100,25 @@ impl ProcessDataState {
                 }
 
                 if needle.write_to_file {
+                    let write_start_pos_in_chunk = (pos_in_chunk as i64
+                        - needle.byte_count_before_match as i64)
+                        .max(0) as usize;
+                    let write_end_pos_in_chunk = (pos_in_chunk
+                        + needle_val_sequence.len()
+                        + needle.byte_count_after_match as usize)
+                        .min(self.haystack_chunk_buffer.len());
+
+                    // `chunk_file_name` format: <this match's global offset>_<file_start_offset>_<file_end_offset>
+                    let chunk_file_name = format!(
+                        "found_g_0x{}_startat_0x{}.bin",
+                        display_hex_offset(match_start_global_offset, 20),
+                        // offset_within_file:
+                        display_hex_offset(
+                            match_start_global_offset + write_start_pos_in_chunk as u64,
+                            1 // minimum width is good
+                        ),
+                    );
+
                     let chunk_output_file_path =
                         PathBuf::from(&needle_dir_path).join(chunk_file_name);
                     let mut output_file = OpenOptions::new()
@@ -115,24 +127,27 @@ impl ProcessDataState {
                         .truncate(true)
                         .open(chunk_output_file_path.clone())
                         .expect("Could not open chunk output file");
-                    match output_file.write_all(&self.haystack_chunk_buffer) {
+
+                    match output_file.write_all(
+                        &self.haystack_chunk_buffer
+                            [write_start_pos_in_chunk..write_end_pos_in_chunk],
+                    ) {
                         Ok(_) => {}
                         Err(e) => error!("Could not write haystack chunk to disk: {}", e),
                     }
 
                     info!(
-                        "Offset {:020}=0x{:016x}. Needle '{}'. {}. Wrote to disk ({} bytes).",
-                        window_global_start_offset,
-                        window_global_start_offset,
+                        "Offset 0x{}. Needle '{}'. {}. Wrote to disk ({} bytes).",
+                        display_hex_offset(match_start_global_offset, 20),
                         needle.name,
                         needle.happiness_level_as_string(),
-                        self.haystack_chunk_buffer
-                            .len()
+                        (write_end_pos_in_chunk - write_start_pos_in_chunk)
                             .to_formatted_string(&Locale::en),
                     );
                 } else {
-                    info!("Offset {:020}=0x{:016x}. Needle '{}'. Happiness level {}. Skipping writing to disk.",
-                        window_global_start_offset, window_global_start_offset,
+                    info!(
+                        "Offset 0x{}. Needle '{}'. Happiness level {}. Skipping writing to disk.",
+                        display_hex_offset(match_start_global_offset, 20),
                         needle.name,
                         needle.happiness_level,
                     );
