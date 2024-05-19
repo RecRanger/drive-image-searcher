@@ -1,5 +1,5 @@
 # drive-image-searcher
-A Rust program to stream a drive image, and search for one or more byte patterns
+A Rust CLI tool to stream a drive image, and search for one or more byte patterns
 
 ## Features
 * Supports custom "needle" definition configuration file.

@@ -3,6 +3,11 @@ name = "drive-image-searcher"
 version = "0.1.0"
 edition = "2021"
 
+license = "BSD-3-Clause"
+description = "A CLI tool to stream a drive image, and search for one or more byte patterns"
+repository = "https://github.com/RecRanger/drive-image-searcher"
+readme = "README.md"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
