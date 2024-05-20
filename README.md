@@ -36,12 +36,7 @@ drive-image-searcher -h
 
 When complete, matching instances within the files will be in `./output_dir/`, alongside logs.
 
-## Bugs and Upcoming Features
-
-* Optimization: if every byte is NULL, then skip checking that block
-* BUG FIX: "found address" doesn't always seem right. Maybe it's fine actually, couldn't reproduce.
-
-
 ## Bugs
 
 * Total file size for block devices shows as 0, so ETA doesn't work.
+* The offsets are incorrect as a result of the carry forward not shifting the haystack

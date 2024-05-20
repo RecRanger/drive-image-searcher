@@ -283,6 +283,21 @@ fn main() -> io::Result<()> {
             Err(e) => panic!("Could not read: {}", e),
         }
 
+        // If all the bytes in the chunk are the same value, then we can skip searching this chunk.
+        // This happens a lot for null/0 bytes in practice.
+        let first_val = process_data_state.haystack_chunk_buffer[0];
+        if process_data_state
+            .haystack_chunk_buffer
+            .iter()
+            .all(|&val| val == first_val)
+        {
+            info!(
+                "Skipping search for chunk {} because all bytes are the same: {}",
+                process_data_state.chunk_count, first_val
+            );
+            continue;
+        }
+
         process_data_state.do_search(&search_assignment);
     }
 
