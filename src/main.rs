@@ -291,14 +291,20 @@ fn main() -> io::Result<()> {
             .iter()
             .all(|&val| val == first_val)
         {
-            info!(
-                "Skipping search for chunk {} because all bytes are the same: {}",
-                process_data_state.chunk_count, first_val
-            );
-            continue;
+            // This log message happens a lot:
+            // debug!(
+            //     "Skipping search for chunk {} because all bytes are the same: {}",
+            //     process_data_state.chunk_count, first_val
+            // );
+        } else {
+            // don't need to skip, so search
+            process_data::do_search(&mut process_data_state, &search_assignment);
         }
 
-        process_data_state.do_search(&search_assignment);
+        // update stats
+        process_data_state.total_haystack_bytes_read +=
+            process_data_state.haystack_chunk_buffer.len() as u64;
+        process_data_state.chunk_count += 1;
     }
 
     info!(
