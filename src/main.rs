@@ -19,21 +19,38 @@ use std::fs::{self, File};
 use std::io::{self, Read, Seek as _};
 use std::path::PathBuf;
 use std::time::Instant;
+use std::time::SystemTime;
 
 use chrono::Utc;
 
 // use: lz4_flex
 use xz2::read::XzDecoder;
 
-use env_logger::Env;
+use fern::Dispatch;
 use log::{debug, error, info, warn};
 use num_traits::AsPrimitive;
 
-fn main() -> io::Result<()> {
-    // set the default log level to INFO
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+fn setup_logger(log_file: &PathBuf) -> Result<(), fern::InitError> {
+    Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "[{} {} {}] {}",
+                humantime::format_rfc3339_seconds(SystemTime::now()),
+                record.level(),
+                record.target(),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Info)
+        .chain(std::io::stdout())
+        .chain(fern::log_file(log_file)?)
+        .apply()?;
+    Ok(())
+}
 
+fn main() -> io::Result<()> {
     info!("Starting Drive Image Searcher");
+    info!("Version: {}", env!("CARGO_PKG_VERSION"));
 
     let cli_arg_matches = App::new("Drive Image Searcher")
         .version(crate_version!())
@@ -62,7 +79,6 @@ fn main() -> io::Result<()> {
                 .short('c')
                 .long("compression-format")
                 .possible_values(vec!["none", "xz", "lz4"])
-                .required(true)
                 .default_value("none"),
         )
         .arg(
@@ -87,9 +103,6 @@ fn main() -> io::Result<()> {
     let needle_config_yaml_path = cli_arg_matches
         .value_of("needle_config_yaml_path")
         .expect("No valid needle config file provided");
-
-    info!("Using args: input_file_path: {}, compression_format: {}, output_dir: {}, needle_config_yaml_path: {}",
-        input_file_path_str, compression_format, cli_output_dir_str, needle_config_yaml_path);
 
     let input_file_path = PathBuf::from(input_file_path_str);
     let input_file_name = input_file_path
@@ -138,6 +151,29 @@ fn main() -> io::Result<()> {
             output_dir_path.display()
         );
     }
+
+    // bind the logs to the output directory
+    let log_file_path = output_dir_path.join("01_general_log.log");
+    setup_logger(&log_file_path).expect("Could not set up logger");
+
+    // re-log a few things so they show in the file
+    info!("Logging to: {}", log_file_path.display());
+    info!(
+        "Drive Image Searcher version: {}",
+        env!("CARGO_PKG_VERSION")
+    );
+    info!("Using args: {:?}", cli_arg_matches);
+    info!("Using args: input_file_path: {}, compression_format: {}, output_dir: {}, needle_config_yaml_path: {}",
+        input_file_path_str, compression_format, cli_output_dir_str, needle_config_yaml_path);
+
+    // copy the needle config file to the output directory
+    let needle_config_file_dest_path = output_dir_path.join("02_needle_config.yaml");
+    fs::copy(needle_config_yaml_path, &needle_config_file_dest_path)
+        .expect("Could not copy needle config file to output directory");
+    info!(
+        "Copied needle config file to: {}",
+        needle_config_file_dest_path.display()
+    );
 
     let jsonl_output_log_file_path = output_dir_path.clone().join("00_all_output_record.jsonl");
 
