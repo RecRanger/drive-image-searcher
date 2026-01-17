@@ -109,8 +109,10 @@ pub fn log_polars_summary(
         )
         .collect()?;
 
-    // print out the result
-    env::set_var("POLARS_FMT_MAX_ROWS", (df.height() + 5).to_string());
+    // Print out the result.
+    unsafe {
+        env::set_var("POLARS_FMT_MAX_ROWS", (df.height() + 5).to_string());
+    }
     info!("{}", df);
 
     Ok(())

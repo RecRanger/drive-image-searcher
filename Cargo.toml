@@ -1,7 +1,7 @@
 [package]
 name = "drive-image-searcher"
 version = "0.2.2"
-edition = "2021"
+edition = "2024"
 
 license = "BSD-3-Clause"
 description = "A CLI tool to stream a drive image, and search for one or more byte patterns"
@@ -20,7 +20,6 @@ serde_json = "1.0.116"
 polars = { version = "0.39.2", features = ["lazy", "json"] }
 
 log = "0.4.21"
-memmap = "0.7.0"
 num-format = "0.4.4"
 thousands = "0.2.0"
 num-traits = "0.2.18"
