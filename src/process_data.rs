@@ -25,14 +25,6 @@ pub fn do_search(search_assignment: &SearchAssignment, haystack: &Mmap) -> Vec<N
     let mut last_summary_log = Instant::now();
     let haystack_len = haystack.len();
 
-    // Pre-calculate maximum pattern length to know when to stop searching
-    let max_pattern_len = search_assignment
-        .needles
-        .iter()
-        .map(|n| n.val.len())
-        .max()
-        .unwrap_or(0);
-
     // Setup progress bar.
     let progress_bar = ProgressBar::new(haystack.len() as u64);
     progress_bar.set_style(
@@ -42,11 +34,7 @@ pub fn do_search(search_assignment: &SearchAssignment, haystack: &Mmap) -> Vec<N
             .progress_chars("#>-")
     );
 
-    info!(
-        "Searching for {} needles (max pattern length: {} bytes)",
-        search_assignment.needles.len(),
-        max_pattern_len
-    );
+    info!("Searching for {} needles", search_assignment.needles.len());
 
     let mut needle_vals_found: Vec<NeedleValFound> = Vec::new();
 
@@ -66,10 +54,10 @@ pub fn do_search(search_assignment: &SearchAssignment, haystack: &Mmap) -> Vec<N
         }
     }
 
-    // Single pass through the haystack, checking all needles at each position
+    // Single pass through the haystack, checking all needles at each position.
     let mut search_pos = 0;
 
-    while search_pos + max_pattern_len <= haystack_len {
+    while search_pos < haystack_len {
         // Update progress bar periodically
         if search_pos % (10 * 1024 * 1024) == 0 {
             // Every 10 MiB
@@ -95,29 +83,27 @@ pub fn do_search(search_assignment: &SearchAssignment, haystack: &Mmap) -> Vec<N
         for needle in &search_assignment.needles {
             let pattern_len = needle.val.len();
 
-            // Check if we have enough bytes remaining for this pattern
+            // Check if we have enough bytes remaining for this pattern.
             if search_pos + pattern_len > haystack_len {
                 continue;
             }
 
-            // Check if pattern matches at current position
+            // Check if pattern matches at current position.
             if &haystack[search_pos..search_pos + pattern_len] == needle.val.as_slice() {
                 // Found a match!
-                let match_global_offset = search_pos as u64;
-                let needle_val_as_string = needle.val_as_string();
 
                 debug!(
                     "{} Found '{}' {} at offset 0x{}",
                     needle.happiness_level_as_string(),
                     needle.name,
-                    needle_val_as_string,
-                    display_hex_offset(match_global_offset, 20)
+                    needle.val_as_string(),
+                    display_hex_offset(search_pos, 20)
                 );
 
-                // Create the NeedleValFound object
+                // Create the NeedleValFound object.
                 let needle_val_found = NeedleValFound::from_needle_val(
                     needle,
-                    match_global_offset,
+                    search_pos as u64,
                     &search_assignment.input_file_path,
                 );
 
@@ -127,18 +113,16 @@ pub fn do_search(search_assignment: &SearchAssignment, haystack: &Mmap) -> Vec<N
 
                 // Write match context to file if requested
                 if needle.write_to_file {
-                    let write_start_offset = match_global_offset
-                        .saturating_sub(needle.byte_count_before_match as u64)
-                        as usize;
-                    let write_end_offset = (match_global_offset as usize
-                        + pattern_len
-                        + needle.byte_count_after_match as usize)
-                        .min(haystack_len);
+                    let write_start_offset =
+                        search_pos.saturating_sub(needle.byte_count_before_match as usize);
+                    let write_end_offset =
+                        (search_pos + pattern_len + needle.byte_count_after_match as usize)
+                            .min(haystack_len);
 
                     let chunk_file_name = format!(
                         "found_g_0x{}_startat_0x{}.bin",
-                        display_hex_offset(match_global_offset, 20),
-                        display_hex_offset(match_global_offset - (write_start_offset as u64), 1),
+                        display_hex_offset(search_pos as u64, 20),
+                        display_hex_offset(search_pos as u64 - (write_start_offset as u64), 1),
                     );
 
                     let chunk_output_file_path = needle_dir_path.join(chunk_file_name);
@@ -156,7 +140,7 @@ pub fn do_search(search_assignment: &SearchAssignment, haystack: &Mmap) -> Vec<N
 
                     info!(
                         "Offset 0x{}. Needle '{}'. {}. Wrote to disk ({} bytes).",
-                        display_hex_offset(match_global_offset, 20),
+                        display_hex_offset(search_pos, 20),
                         needle.name,
                         needle.happiness_level_as_string(),
                         (write_end_offset - write_start_offset).to_formatted_string(&Locale::en),
@@ -164,13 +148,13 @@ pub fn do_search(search_assignment: &SearchAssignment, haystack: &Mmap) -> Vec<N
                 } else {
                     info!(
                         "Offset 0x{}. Needle '{}'. Happiness level {}. Skipping writing to disk.",
-                        display_hex_offset(match_global_offset, 20),
+                        display_hex_offset(search_pos, 20),
                         needle.name,
                         needle.happiness_level,
                     );
                 }
 
-                // Write to JSONL files
+                // Write to JSONL files.
                 needle_val_found
                     .append_to_jsonl_file(&search_assignment.jsonl_output_log_file_path)
                     .expect("Could not write needle val to overall JSONL file");
