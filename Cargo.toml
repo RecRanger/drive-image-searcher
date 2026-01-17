@@ -17,19 +17,18 @@ serde = { version = "1.0.198", features = ["derive"] }
 serde_yaml = "0.9.34"
 serde_json = "1.0.116"
 
-polars = { version = "0.39.2", features = ["lazy", "json"] }
+polars = { version = "0.52.0", features = ["lazy", "json", "timezones"] }
 
 log = "0.4.21"
 num-format = "0.4.4"
 thousands = "0.2.0"
 num-traits = "0.2.18"
-rand = "0.8.5"
+rand = "0.9"
 
 chrono = "0.4.38"
-md5 = "0.7.0"
 hex = "0.4.3"
 
-fern = "0.6.2"
+fern = "0.7"
 humantime = "2.1.0"
 
 memmap2 = "0.9.9"

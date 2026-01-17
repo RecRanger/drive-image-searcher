@@ -104,8 +104,8 @@ pub fn log_polars_summary(
             col("description_notes").first(), // should all be the same
         ])
         .sort(
-            ["happiness_level", "name"],
-            SortMultipleOptions::default().with_order_descendings(vec![true, false]),
+            ["happiness_level", "count", "name"],
+            SortMultipleOptions::default().with_order_descending_multi(vec![true, true, false]),
         )
         .collect()?;
 
