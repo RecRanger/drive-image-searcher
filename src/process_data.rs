@@ -1,7 +1,9 @@
-use crate::display_hex::display_hex_offset;
 use crate::found_needle::NeedleValFound;
 use crate::needle::Needle;
+use crate::{display_hex::display_hex_offset, found_needle::log_polars_summary};
 
+use indicatif::{ProgressBar, ProgressStyle};
+use memmap2::Mmap;
 use num_format::{Locale, ToFormattedString as _};
 
 use std::fs;
@@ -19,150 +21,183 @@ pub struct SearchAssignment {
     pub needles: Vec<Needle>,
 }
 
-pub struct ProcessDataState {
-    // variables to keep track of progress, etc.
-    pub haystack_chunk_buffer: Vec<u8>,
-    pub total_haystack_bytes_read: u64,
-    pub last_progress_log_time: Instant,
-    pub start_time: Instant,
+pub fn do_search(search_assignment: &SearchAssignment, haystack: &Mmap) -> Vec<NeedleValFound> {
+    let mut last_summary_log = Instant::now();
+    let haystack_len = haystack.len();
 
-    pub needle_vals_found: Vec<NeedleValFound>,
-    pub chunk_count: u64,
-    pub partial_chunk_read_count: u32,
-}
+    // Pre-calculate maximum pattern length to know when to stop searching
+    let max_pattern_len = search_assignment
+        .needles
+        .iter()
+        .map(|n| n.val.len())
+        .max()
+        .unwrap_or(0);
 
-impl ProcessDataState {
-    pub fn new(haystack_chunk_buffer_size_bytes: usize) -> Self {
-        Self {
-            haystack_chunk_buffer: vec![0; haystack_chunk_buffer_size_bytes],
-            total_haystack_bytes_read: 0,
-            last_progress_log_time: Instant::now(),
-            start_time: Instant::now(),
-            needle_vals_found: Vec::new(),
-            chunk_count: 0,
-            partial_chunk_read_count: 0,
+    // Setup progress bar.
+    let progress_bar = ProgressBar::new(haystack.len() as u64);
+    progress_bar.set_style(
+        ProgressStyle::default_bar()
+            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({binary_bytes_per_sec}) - ETA {eta}")
+            .unwrap()
+            .progress_chars("#>-")
+    );
+
+    info!(
+        "Searching for {} needles (max pattern length: {} bytes)",
+        search_assignment.needles.len(),
+        max_pattern_len
+    );
+
+    let mut needle_vals_found: Vec<NeedleValFound> = Vec::new();
+
+    // Create needle directories upfront
+    for needle in &search_assignment.needles {
+        let needle_dir_path = search_assignment
+            .output_dir_path
+            .join(format!("{}_{}", needle.happiness_level, needle.name));
+
+        if !needle_dir_path.exists() {
+            fs::create_dir(&needle_dir_path).expect("Could not create per-needle output directory");
+            info!(
+                "Created needle directory for '{}': {}",
+                needle.name,
+                needle_dir_path.display()
+            );
         }
     }
 
-    pub fn sec_since_last_progress_log(&self) -> f32 {
-        self.last_progress_log_time.elapsed().as_secs_f32()
-    }
-}
+    // Single pass through the haystack, checking all needles at each position
+    let mut search_pos = 0;
 
-pub fn do_search(process_data_state: &mut ProcessDataState, search_assignment: &SearchAssignment) {
-    let haystack_chunk_start_global_offset = process_data_state.total_haystack_bytes_read;
-    let _haystack_chunk_end_global_offset = process_data_state.total_haystack_bytes_read
-        + (process_data_state.haystack_chunk_buffer.len() as u64);
+    while search_pos + max_pattern_len <= haystack_len {
+        // Update progress bar periodically
+        if search_pos % (10 * 1024 * 1024) == 0 {
+            // Every 10 MiB
+            progress_bar.set_position(search_pos as u64);
 
-    for needle in search_assignment.needles.as_slice() {
-        let needle_val_sequence = &needle.val;
-        if let Some(pos_in_chunk) = process_data_state
-            .haystack_chunk_buffer
-            .windows(needle_val_sequence.len())
-            .position(|window| window == needle_val_sequence)
-        {
-            // Found a match!
-            // Window = Match now
-            let match_start_global_offset: u64 =
-                haystack_chunk_start_global_offset + pos_in_chunk as u64;
-            let needle_val_as_string = needle.val_as_string();
-
-            // just a debug, not the main log
-            debug!(
-                "{} Found '{}' {} at position {} in the chunk",
-                needle.happiness_level_as_string(),
-                needle.name,
-                needle_val_as_string,
-                pos_in_chunk
-            );
-
-            // Create the NeedleValFound object
-            let needle_val_found = NeedleValFound::from_needle_val(
-                needle,
-                match_start_global_offset + pos_in_chunk as u64,
-                &search_assignment.input_file_path,
-            );
-
-            // Write the haystack chunk to disk
-            let needle_dir_path = search_assignment.output_dir_path.clone().join(format!(
-                "{}_{}",
-                needle.happiness_level,
-                needle.name.clone()
-            ));
-            if !needle_dir_path.exists() {
-                fs::create_dir(&needle_dir_path)
-                    .expect("Could not create per-needle output directory");
+            // Log summary every 30 seconds
+            if last_summary_log.elapsed().as_secs() >= 30 {
                 info!(
-                    "{}. First time for '{}' needle. Created new needle directory: {}",
-                    needle.happiness_level_as_string(),
-                    needle.name,
-                    needle_dir_path.display()
-                );
-            }
-
-            if needle.write_to_file {
-                let write_start_pos_in_chunk =
-                    (pos_in_chunk as i64 - needle.byte_count_before_match as i64).max(0) as usize;
-                let write_end_pos_in_chunk = (pos_in_chunk
-                    + needle_val_sequence.len()
-                    + needle.byte_count_after_match as usize)
-                    .min(process_data_state.haystack_chunk_buffer.len());
-
-                // `chunk_file_name` format: <this match's global offset>_<file_start_offset>_<file_end_offset>
-                let chunk_file_name = format!(
-                    "found_g_0x{}_startat_0x{}.bin",
-                    display_hex_offset(match_start_global_offset, 20),
-                    // offset_within_file:
-                    display_hex_offset(
-                        pos_in_chunk - write_start_pos_in_chunk,
-                        1 // minimum width is fine
-                    ),
+                    "Progress: {:.2}% complete, {} matches found so far",
+                    (search_pos as f64 / haystack_len as f64) * 100.0,
+                    needle_vals_found.len()
                 );
 
-                let chunk_output_file_path = PathBuf::from(&needle_dir_path).join(chunk_file_name);
-                let mut output_file = OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .truncate(true)
-                    .open(chunk_output_file_path.clone())
-                    .expect("Could not open chunk output file");
-
-                match output_file.write_all(
-                    &process_data_state.haystack_chunk_buffer
-                        [write_start_pos_in_chunk..write_end_pos_in_chunk],
-                ) {
-                    Ok(_) => {}
-                    Err(e) => error!("Could not write haystack chunk to disk: {}", e),
+                match log_polars_summary(&search_assignment.jsonl_output_log_file_path) {
+                    Ok(()) => (),
+                    Err(e) => error!("Failed to log polars summary: {}", e),
                 }
 
-                info!(
-                    "Offset 0x{}. Needle '{}'. {}. Wrote to disk ({} bytes).",
-                    display_hex_offset(match_start_global_offset, 20),
-                    needle.name,
-                    needle.happiness_level_as_string(),
-                    (write_end_pos_in_chunk - write_start_pos_in_chunk)
-                        .to_formatted_string(&Locale::en),
-                );
-            } else {
-                info!(
-                    "Offset 0x{}. Needle '{}'. Happiness level {}. Skipping writing to disk.",
-                    display_hex_offset(match_start_global_offset, 20),
-                    needle.name,
-                    needle.happiness_level,
-                );
+                last_summary_log = Instant::now();
+            }
+        }
+
+        for needle in &search_assignment.needles {
+            let pattern_len = needle.val.len();
+
+            // Check if we have enough bytes remaining for this pattern
+            if search_pos + pattern_len > haystack_len {
+                continue;
             }
 
-            // Write the needle val to disk as JSONL (in both the general file, and the needle-specific file)
-            needle_val_found
-                .append_to_jsonl_file(&search_assignment.jsonl_output_log_file_path)
-                .expect("Could not write needle val to overall JSONL file");
-            needle_val_found
-                .append_to_jsonl_file(
-                    &PathBuf::from(&needle_dir_path).join(format!("001_{}.jsonl", needle.name)),
-                )
-                .expect("Could not write needle val to per-needle JSONL file");
+            // Check if pattern matches at current position
+            if &haystack[search_pos..search_pos + pattern_len] == needle.val.as_slice() {
+                // Found a match!
+                let match_global_offset = search_pos as u64;
+                let needle_val_as_string = needle.val_as_string();
 
-            process_data_state.needle_vals_found.push(needle_val_found);
+                debug!(
+                    "{} Found '{}' {} at offset 0x{}",
+                    needle.happiness_level_as_string(),
+                    needle.name,
+                    needle_val_as_string,
+                    display_hex_offset(match_global_offset, 20)
+                );
+
+                // Create the NeedleValFound object
+                let needle_val_found = NeedleValFound::from_needle_val(
+                    needle,
+                    match_global_offset,
+                    &search_assignment.input_file_path,
+                );
+
+                let needle_dir_path = search_assignment
+                    .output_dir_path
+                    .join(format!("{}_{}", needle.happiness_level, needle.name));
+
+                // Write match context to file if requested
+                if needle.write_to_file {
+                    let write_start_offset = match_global_offset
+                        .saturating_sub(needle.byte_count_before_match as u64)
+                        as usize;
+                    let write_end_offset = (match_global_offset as usize
+                        + pattern_len
+                        + needle.byte_count_after_match as usize)
+                        .min(haystack_len);
+
+                    let chunk_file_name = format!(
+                        "found_g_0x{}_startat_0x{}.bin",
+                        display_hex_offset(match_global_offset, 20),
+                        display_hex_offset(match_global_offset - (write_start_offset as u64), 1),
+                    );
+
+                    let chunk_output_file_path = needle_dir_path.join(chunk_file_name);
+                    let mut output_file = OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(&chunk_output_file_path)
+                        .expect("Could not open chunk output file");
+
+                    match output_file.write_all(&haystack[write_start_offset..write_end_offset]) {
+                        Ok(_) => {}
+                        Err(e) => error!("Could not write haystack chunk to disk: {}", e),
+                    }
+
+                    info!(
+                        "Offset 0x{}. Needle '{}'. {}. Wrote to disk ({} bytes).",
+                        display_hex_offset(match_global_offset, 20),
+                        needle.name,
+                        needle.happiness_level_as_string(),
+                        (write_end_offset - write_start_offset).to_formatted_string(&Locale::en),
+                    );
+                } else {
+                    info!(
+                        "Offset 0x{}. Needle '{}'. Happiness level {}. Skipping writing to disk.",
+                        display_hex_offset(match_global_offset, 20),
+                        needle.name,
+                        needle.happiness_level,
+                    );
+                }
+
+                // Write to JSONL files
+                needle_val_found
+                    .append_to_jsonl_file(&search_assignment.jsonl_output_log_file_path)
+                    .expect("Could not write needle val to overall JSONL file");
+                needle_val_found
+                    .append_to_jsonl_file(
+                        &needle_dir_path.join(format!("001_{}.jsonl", needle.name)),
+                    )
+                    .expect("Could not write needle val to per-needle JSONL file");
+
+                needle_vals_found.push(needle_val_found);
+            }
         }
+
+        search_pos += 1;
     }
+
+    progress_bar.finish_with_message("Search complete");
+
+    // Final summary per needle
+    info!("Search complete. Summary by needle:");
+    for needle in &search_assignment.needles {
+        let count = needle_vals_found
+            .iter()
+            .filter(|n| n.name == needle.name)
+            .count();
+        info!("  - '{}': {} matches", needle.name, count);
+    }
+
+    needle_vals_found
 }
