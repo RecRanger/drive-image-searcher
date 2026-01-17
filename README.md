@@ -8,7 +8,6 @@ drive-image-searcher -h
 
 ## Features
 * Supports custom "needle" definition configuration file.
-* Supports reading from compressed disk images (lz4 and xz compression).
 * Writes out chunks of data where the needle was found.
 * Fast.
 
@@ -32,11 +31,10 @@ drive-image-searcher -h
 ```
 
 2. Run `cargo install drive-image-searcher`.
-3. Run `drive-image-searcher -c none -i /path/to/dd_file.img -n /path/to/needle_config.yaml -o ./output_dir/`
+3. Run `drive-image-searcher -i /path/to/dd_file.img -n /path/to/needle_config.yaml -o ./output_dir/`
 
 When complete, matching instances within the files will be in `./output_dir/`, alongside logs.
 
 ## Bugs
 
 * Total file size for block devices shows as 0, so ETA doesn't work.
-* The offsets are incorrect as a result of the carry forward not shifting the haystack

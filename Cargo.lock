@@ -502,7 +502,7 @@ dependencies = [
 
 [[package]]
 name = "drive-image-searcher"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "aho-corasick",
  "chrono",
